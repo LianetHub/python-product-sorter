@@ -95,6 +95,12 @@ MAPPING = {
     "Изображение": [
         "Изображения", 
         "Файлы"
+    ],
+    
+    "URL": [
+        "URL",
+        "Ссылка",
+        "Сайт"
     ]
 }
 
@@ -174,6 +180,11 @@ def process_catalog():
     final_df = temp_df.groupby("Артикул", as_index=False).agg(
         lambda x: x.dropna().iloc[0] if not x.dropna().empty else np.nan
     )
+    
+    cols = list(final_df.columns)
+    if "URL" in cols:
+        cols.insert(0, cols.pop(cols.index("URL")))
+        final_df = final_df[cols]
 
     logging.info("Sorting by Manufacturer...")
     if "Производитель" in final_df.columns:
