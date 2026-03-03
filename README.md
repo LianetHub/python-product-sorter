@@ -12,8 +12,8 @@
 1. **Клонируйте репозиторий:**
 
     ```bash
-    git clone https://github.com/LianetHub/phyton-product-sorter
-    cd phyton-product-sorter
+    git clone https://github.com/LianetHub/python-product-sorter
+    cd python-product-sorter
     ```
 
 2. **Установите зависимости:**

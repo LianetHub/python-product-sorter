@@ -1,4 +1,5 @@
 /data
-/.vsvode
+/.vscode
 /temp
 merged_catalog.xlsx
+/.venv

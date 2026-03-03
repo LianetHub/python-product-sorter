@@ -14,10 +14,15 @@ DATA_FOLDER = "data/"
 OUTPUT_FILE = "merged_catalog.xlsx"
 
 MAPPING = {
+    "Наличие": [
+        "Наличие",
+        "В наличии",
+        "Доступность"
+    ],
+
     "Производитель": [
-        "Бренд", 
-        "Производитель", 
-        "Заводская маркировка"
+        "Производитель",
+        "Бренд"
     ],
     
     "Цена": [
@@ -30,6 +35,7 @@ MAPPING = {
     ],
     
     "Мощность в режиме охлаждения": [
+        "Мощность в режиме охлаждения",
         "Холодопроизводительность (кВт)", 
         "Номинальная холодопроизводительность, кВт", 
         "Номинальная холодопроизводительность", 
@@ -37,7 +43,14 @@ MAPPING = {
         "Произв. холод, кВт", 
         "Производительность холод , кВт", 
         "Холодопроизводительность", 
-        "Охлаждение (Вт)"
+        "Охлаждение (Вт)",
+        "Потребляемая мощность (охлаждение) , кВт",
+        "Мощность охлаждения (кВт)"
+    ],
+
+    "Мощность в режиме обогрева": [
+        "Мощность в режиме обогрева",
+        "Потребляемая мощность (обогрев) , кВт"
     ],
     
     "Тип хладагента": [
@@ -68,6 +81,7 @@ MAPPING = {
     
     "Основные режимы (режим работы)": [
         "Режим работы", 
+        "Основные режимы",
         "Основные режимы (режим работы)", 
         "Режимы работы"
     ],
@@ -80,6 +94,7 @@ MAPPING = {
     ],
     
     "Максимальная длина коммуникаций": [
+        "Максимальная длина коммуникаций",
         "Максимальная длина трассы", 
         "Max.длина магистрали , м", 
         "Длина трассы, м", 
@@ -125,26 +140,28 @@ def load_data(folder):
         try:
             df = pd.read_excel(file)
             df.columns = df.columns.astype(str).str.strip()
+            df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+            df = df.replace(r'^\s*$', np.nan, regex=True)
             logging.info(f"Loaded: {file} ({len(df)} rows)")
             dataframes.append(df)
         except Exception as e:
             logging.error(f"Error loading {file}: {e}")
             
-    return pd.concat(dataframes, axis=0, ignore_index=True) if dataframes else None
+    return pd.concat(dataframes, axis=0, ignore_index=True, sort=False) if dataframes else None
 
 def extract_filters(row, source_columns):
     active_filters = []
     
     for key in FILTER_KEYS:
-        if key in row.index and pd.notna(row[key]) and str(row[key]).strip():
+        if key in row.index and pd.notna(row[key]):
             active_filters.append(str(row[key]))
             
-    boolean_cols = [c for c in source_columns if "фильтр тонкой очистки" in c.lower() and c not in FILTER_KEYS]
+    boolean_cols = [c for c in source_columns if "фильтр тонкой очистки" in str(c).lower() and c not in FILTER_KEYS]
     
     for col in boolean_cols:
-        val = str(row[col]).strip().lower()
+        val = str(row[col]).lower()
         if val in YES_VALUES:
-            name = col.replace("Дополнительный фильтр тонкой очистки ", "")
+            name = str(col).replace("Дополнительный фильтр тонкой очистки ", "")
             active_filters.append(name)
             
     return ", ".join(active_filters) if active_filters else np.nan
@@ -155,31 +172,34 @@ def process_catalog():
         return
 
     logging.info("Building unified catalog...")
-    temp_df = pd.DataFrame()
+    temp_df = pd.DataFrame(index=raw_df.index)
     current_cols = raw_df.columns.tolist()
 
     if "Артикул" in current_cols:
         temp_df["Артикул"] = raw_df["Артикул"]
-    else:
-        logging.error("Column 'Артикул' not found! Duplicates cannot be merged correctly.")
-        return
-
+    
     for target, sources in MAPPING.items():
-        match = next((s for s in sources if s in current_cols), None)
-        if match:
-            temp_df[target] = raw_df[match]
-            logging.info(f"Mapped: {target} <- {match}")
-        else:
-            temp_df[target] = np.nan
-            logging.warning(f"Field not found: {target}")
+        temp_df[target] = np.nan
+        for s in sources:
+            if s in current_cols:
+                temp_df[target] = temp_df[target].fillna(raw_df[s])
+        
+    logging.info("Filtering by availability...")
+    if "Наличие" in temp_df.columns:
+        valid_rows = temp_df["Наличие"].astype(str).str.lower().isin(YES_VALUES)
+        temp_df = temp_df[valid_rows].copy()
+        raw_df_filtered = raw_df.loc[temp_df.index]
+        logging.info(f"Rows after filtering: {len(temp_df)}")
+    else:
+        logging.warning("Column 'Наличие' not found in mapping, skipping filter.")
+        raw_df_filtered = raw_df
 
     logging.info("Processing air filters...")
-    temp_df["Фильтры тонкой очистки воздуха"] = raw_df.apply(extract_filters, axis=1, source_columns=current_cols)
-
-    logging.info("Merging duplicates and filling gaps...")
-    final_df = temp_df.groupby("Артикул", as_index=False).agg(
-        lambda x: x.dropna().iloc[0] if not x.dropna().empty else np.nan
+    temp_df["Фильтры тонкой очистки воздуха"] = raw_df_filtered.apply(
+        extract_filters, axis=1, source_columns=current_cols
     )
+
+    final_df = temp_df.copy()
     
     cols = list(final_df.columns)
     if "URL" in cols:
@@ -192,7 +212,7 @@ def process_catalog():
 
     try:
         final_df.to_excel(OUTPUT_FILE, index=False)
-        logging.info(f"Success! Saved to {OUTPUT_FILE} | Total unique items: {len(final_df)}")
+        logging.info(f"Success! Saved to {OUTPUT_FILE} | Total items: {len(final_df)}")
     except PermissionError:
         logging.error(f"Could not save! Close '{OUTPUT_FILE}' and try again.")
     except Exception as e:
