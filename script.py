@@ -33,10 +33,18 @@ def process_catalog():
         for s in sources:
             if s in current_cols:
                 values = raw_df[s]
-                if "мощность" in target.lower() or "охлаждение" in target.lower():
+
+                is_numeric_target = any(
+                    word in target.lower()
+                    for word in ["мощность", "охлаждение", "хладагента"]
+                )
+                is_class_target = "класс" in target.lower()
+
+                if is_numeric_target and not is_class_target:
                     values = values.apply(normalize_power)
                 elif "хладагента (кг)" in target.lower():
                     values = values.apply(normalize_refrigerant)
+
                 temp_df[target] = temp_df[target].fillna(values)
 
     temp_df["Производитель"] = np.nan
