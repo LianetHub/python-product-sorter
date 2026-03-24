@@ -96,7 +96,7 @@ def process_catalog():
         temp_df = temp_df[~mask_to_remove].copy()
         raw_df_filtered = raw_df_filtered.loc[temp_df.index]
 
-    temp_df["Фильтры тонкой очистки воздуха"] = raw_df_filtered.apply(
+    temp_df["Наличие фильтров"] = raw_df_filtered.apply(
         extract_filters, axis=1, source_columns=current_cols
     )
 

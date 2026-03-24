@@ -49,17 +49,35 @@ def normalize_refrigerant(value):
 
 def extract_filters(row, source_columns):
     active_filters = []
+
     for key in FILTER_KEYS:
         if key in row.index and pd.notna(row[key]):
-            active_filters.append(str(row[key]))
+            val = str(row[key]).strip()
+            if val.lower() not in ["нет", "0", "-", "nan", "none"]:
+                active_filters.append(val)
+
+    check_markers = [
+        "Дополнительный фильтр",
+        "Противопылевой фильтр",
+        "Фильтры для воды",
+    ]
+
     boolean_cols = [
         c
         for c in source_columns
-        if "фильтр тонкой очистки" in str(c).lower() and c not in FILTER_KEYS
+        if any(marker in str(c) for marker in check_markers) and c not in FILTER_KEYS
     ]
+
     for col in boolean_cols:
-        val = str(row[col]).lower()
+        val = str(row[col]).lower().strip()
         if val in YES_VALUES:
             name = str(col).replace("Дополнительный фильтр тонкой очистки ", "")
-            active_filters.append(name)
-    return ", ".join(active_filters) if active_filters else np.nan
+            name = name.replace(" в комплекте", "")
+            active_filters.append(name.strip())
+
+    unique_filters = []
+    for f in active_filters:
+        if f not in unique_filters:
+            unique_filters.append(f)
+
+    return ", ".join(unique_filters) if unique_filters else np.nan
