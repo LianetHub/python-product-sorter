@@ -3,3 +3,4 @@
 /temp
 merged_catalog.xlsx
 /.venv
+__pycache__
