@@ -50,7 +50,13 @@ MAPPING = {
         "Потребляемая мощность Охлаждение (кВт)",
         "Потребляемая мощность (Охлаждение) (кВт)",
     ],
-    "Тип хладагента": ["Тип хладагента", "Марка фреона"],
+    "Тип хладагента": ["Тип хладагента", "Марка фреона", "Хладагент"],
+    "Заправка хладагента (кг)": [
+        "Заправка хладагента (кг)",
+        "Количество заправляемого хладагента , кг",
+        "Заводская заправка хладагента, кг",
+        "Заводская заправка хладагента",
+    ],
     "Цвет": ["Цвет внутреннего блока", "Цвет прибора", "Цвет"],
     "Класс энергопотребления": [
         "Класс энергопотребления",
@@ -138,6 +144,19 @@ def normalize_power(value):
     return round(num, 3)
 
 
+def normalize_refrigerant(value):
+    if pd.isna(value):
+        return np.nan
+    s_val = str(value).lower().replace(",", ".").strip()
+    match = re.search(r"(\d+\.?\d*)", s_val)
+    if not match:
+        return np.nan
+    num = float(match.group(1))
+    if "г" in s_val or num > 50:
+        num = num / 1000
+    return round(num, 3)
+
+
 def load_data(folder):
     all_files = glob.glob(os.path.join(folder, "*.xlsx"))
     files = [f for f in all_files if not os.path.basename(f).startswith("~$")]
@@ -204,6 +223,8 @@ def process_catalog():
                 values = raw_df[s]
                 if "мощность" in target.lower() or "охлаждение" in target.lower():
                     values = values.apply(normalize_power)
+                elif "хладагента (кг)" in target.lower():
+                    values = values.apply(normalize_refrigerant)
                 temp_df[target] = temp_df[target].fillna(values)
 
     temp_df["Производитель"] = np.nan
