@@ -21,7 +21,6 @@ def process_catalog():
         return
 
     raw_df = raw_df.copy()
-
     temp_df = pd.DataFrame(index=raw_df.index)
     current_cols = raw_df.columns.tolist()
 
@@ -34,15 +33,17 @@ def process_catalog():
             if s in current_cols:
                 values = raw_df[s]
 
-                is_numeric_target = any(
-                    word in target.lower()
-                    for word in ["мощность", "охлаждение", "хладагента"]
+                is_power_target = any(
+                    word in target.lower() for word in ["мощность", "охлаждение"]
                 )
-                is_class_target = "класс" in target.lower()
+                is_refrigerant_weight = "хладагента (кг)" in target.lower()
+                is_skip_normalization = any(
+                    word in target.lower() for word in ["класс", "тип"]
+                )
 
-                if is_numeric_target and not is_class_target:
+                if is_power_target and not is_skip_normalization:
                     values = values.apply(normalize_power)
-                elif "хладагента (кг)" in target.lower():
+                elif is_refrigerant_weight:
                     values = values.apply(normalize_refrigerant)
 
                 temp_df[target] = temp_df[target].fillna(values)
@@ -87,11 +88,15 @@ def process_catalog():
     temp_df.loc[temp_df["Категория"].isin(["nan", ""]), "Категория"] = np.nan
 
     if "Наличие" in temp_df.columns:
-        valid_rows = temp_df["Наличие"].astype(str).str.lower().isin(YES_VALUES)
-        temp_df = temp_df[valid_rows].copy()
-        raw_df_filtered = raw_df.loc[temp_df.index]
-    else:
-        raw_df_filtered = raw_df
+        temp_df["Наличие"] = (
+            temp_df["Наличие"]
+            .astype(str)
+            .str.lower()
+            .str.strip()
+            .apply(lambda x: "Да" if x in YES_VALUES else "Нет")
+        )
+
+    raw_df_filtered = raw_df.loc[temp_df.index]
 
     if "Название" in temp_df.columns:
         stop_words = ["пульт", "фильтр", "панель", "wi-fi", "адаптер"]
